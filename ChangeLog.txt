@@ -1,2 +1,2 @@
-=== TeXSample Console 0.1.0 (xx xxxx 2013) ===
+=== TeXSample Console 0.1.0 (22 June 2013) ===
     * First release

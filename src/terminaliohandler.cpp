@@ -152,7 +152,6 @@ void TerminalIOHandler::disconnectFromHost()
         mremote->close();
         return writeLine(tr("Disconnect timeout, socket closed", ""));
     }
-    writeLine(tr("Disconnected", ""));
 }
 
 void TerminalIOHandler::sendCommand(const QString &cmd, const QStringList &args)

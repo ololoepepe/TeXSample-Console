@@ -19,15 +19,21 @@ int main(int argc, char *argv[])
     tRegister();
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName("TeXSample Console");
-    QCoreApplication::setApplicationVersion("0.1.0-pa1");
+    QCoreApplication::setApplicationVersion("0.1.0");
     QCoreApplication::setOrganizationName("TeXSample Team");
     QCoreApplication::setOrganizationDomain("https://github.com/TeXSample-Team/TeXSample-Console");
 #if defined(BUILTIN_RESOURCES)
+    Q_INIT_RESOURCE(texsample);
+    Q_INIT_RESOURCE(texsample_translations);
     Q_INIT_RESOURCE(texsample_console);
     Q_INIT_RESOURCE(texsample_console_translations);
 #endif
     int ret = 0;
     BCoreApplication bapp;
+    BCoreApplication::installTranslator(new BTranslator("qt"));
+    BCoreApplication::installTranslator(new BTranslator("beqt"));
+    BCoreApplication::installTranslator(new BTranslator("texsample"));
+    BCoreApplication::installTranslator(new BTranslator("texsample-console"));
     Q_UNUSED(bapp);
     TerminalIOHandler::writeLine(QCoreApplication::translate("main", "This is", "") + " "
                                  + QCoreApplication::applicationName() +
@@ -37,9 +43,6 @@ int main(int argc, char *argv[])
     QString logfn = BCoreApplication::location(BCoreApplication::DataPath, BCoreApplication::UserResources) + "/logs/";
     logfn += QDateTime::currentDateTime().toString("yyyy.MM.dd-hh.mm.ss") + ".txt";
     BCoreApplication::logger()->setFileName(logfn);
-    BCoreApplication::installTranslator(new BTranslator("qt"));
-    BCoreApplication::installTranslator(new BTranslator("beqt"));
-    BCoreApplication::installTranslator(new BTranslator("texsample-console"));
     TerminalIOHandler handler;
     QStringList args = QCoreApplication::arguments();
     if (args.size() > 1)
