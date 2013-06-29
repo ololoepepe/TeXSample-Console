@@ -20,12 +20,176 @@
 #include <QByteArray>
 #include <QCryptographicHash>
 #include <QAbstractSocket>
+#include <QSettings>
 
 #include <QDebug>
 
 /*============================================================================
+================================ SettingsItem ================================
+============================================================================*/
+
+class SettingsItem
+{
+public:
+    explicit SettingsItem();
+    explicit SettingsItem(const QString &key, QVariant::Type t = QVariant::String);
+    SettingsItem(const SettingsItem &other);
+public:
+    void setKey(const QString &key);
+    void setType(const QVariant::Type t);
+    void setProperty(const QString &name, const QVariant &value = QVariant());
+    void addChildItem(const SettingsItem &item);
+    void addChildItem(const QString &key, QVariant::Type t = QVariant::String);
+    void removeChildItem(const QString &key);
+    QString key() const;
+    QVariant::Type type() const;
+    QVariant property(const QString &name) const;
+    QList<SettingsItem> childItems() const;
+    SettingsItem testPath(const QString &path, const QChar &separator = '.') const;
+public:
+    SettingsItem &operator =(const SettingsItem &other);
+    bool operator ==(const SettingsItem &other) const;
+private:
+    QString mkey;
+    QVariant::Type mtype;
+    QVariantMap mproperties;
+    QList<SettingsItem> mchildren;
+};
+
+/*============================================================================
+================================ SettingsItem ================================
+============================================================================*/
+
+/*============================== Public constructors =======================*/
+
+SettingsItem::SettingsItem()
+{
+    mtype = QVariant::Invalid;
+}
+
+SettingsItem::SettingsItem(const QString &key, QVariant::Type t)
+{
+    mkey = key;
+    mtype = t;
+}
+
+SettingsItem::SettingsItem(const SettingsItem &other)
+{
+    *this = other;
+}
+
+/*============================== Public methods ============================*/
+
+void SettingsItem::setKey(const QString &key)
+{
+    mkey = key;
+}
+
+void SettingsItem::setType(const QVariant::Type t)
+{
+    mtype = t;
+}
+
+void SettingsItem::setProperty(const QString &name, const QVariant &value)
+{
+    if (name.isEmpty())
+        return;
+    if (value.isValid())
+        mproperties[name] = value;
+    else
+        mproperties.remove(name);
+}
+
+void SettingsItem::addChildItem(const SettingsItem &item)
+{
+    if (item.key().isEmpty() || QVariant::Invalid == item.type() || mchildren.contains(item))
+        return;
+    mchildren << item;
+}
+
+void SettingsItem::addChildItem(const QString &key, QVariant::Type t)
+{
+    addChildItem(SettingsItem(key, t));
+}
+
+void SettingsItem::removeChildItem(const QString &key)
+{
+    if (key.isEmpty())
+        return;
+    mchildren.removeAll(SettingsItem(key));
+}
+
+QString SettingsItem::key() const
+{
+    return mkey;
+}
+
+QVariant::Type SettingsItem::type() const
+{
+    return mtype;
+}
+
+QVariant SettingsItem::property(const QString &name) const
+{
+    return mproperties.value(name);
+}
+
+QList<SettingsItem> SettingsItem::childItems() const
+{
+    return mchildren;
+}
+
+SettingsItem SettingsItem::testPath(const QString &path, const QChar &separator) const
+{
+    if (path.isEmpty())
+        return SettingsItem();
+    if (mkey.isEmpty())
+    {
+        foreach (const SettingsItem &i, mchildren)
+        {
+            SettingsItem si = i.testPath(path, separator);
+            if (QVariant::Invalid != si.type())
+                return si;
+        }
+    }
+    else
+    {
+        QStringList sl = path.split(!separator.isNull() ? separator : QChar('.'));
+        if (sl.takeFirst() != mkey)
+            return SettingsItem();
+        QString spath = sl.join(QString(separator));
+        if (spath.isEmpty())
+            return *this;
+        foreach (const SettingsItem &i, mchildren)
+        {
+            SettingsItem si = i.testPath(spath, separator);
+            if (QVariant::Invalid != si.type())
+                return si;
+        }
+    }
+    return SettingsItem();
+}
+
+/*============================== Public operators ==========================*/
+
+SettingsItem &SettingsItem::operator =(const SettingsItem &other)
+{
+    mkey = other.mkey;
+    mtype = other.mtype;
+    mproperties = other.mproperties;
+    mchildren = other.mchildren;
+    return *this;
+}
+
+bool SettingsItem::operator ==(const SettingsItem &other) const
+{
+    return mkey == other.mkey; //TODO
+}
+
+/*============================================================================
 ================================ TerminalIOHandler ===========================
 ============================================================================*/
+
 /*============================== Public constructors =======================*/
 
 TerminalIOHandler::TerminalIOHandler(QObject *parent) :
@@ -49,6 +213,8 @@ TerminalIOHandler::TerminalIOHandler(QObject *parent) :
     installHandler("set", (InternalHandler) &TerminalIOHandler::handleRemote);
     installHandler("start", (InternalHandler) &TerminalIOHandler::handleRemote);
     installHandler("stop", (InternalHandler) &TerminalIOHandler::handleRemote);
+    installHandler("local-set", (InternalHandler) &TerminalIOHandler::handleSetLocal);
+    installHandler("help", (InternalHandler) &TerminalIOHandler::handleHelp);
 }
 
 TerminalIOHandler::~TerminalIOHandler()
@@ -65,6 +231,20 @@ void TerminalIOHandler::connectToHost(const QString &hostName)
     writeLine(tr("Connecting to", "") + " " + hostName + "...");
     handleConnect("connect", QStringList() << hostName);
 }
+
+/*============================== Static private methods ====================*/
+
+void TerminalIOHandler::writeHelpLine(const QString &command, const QString &description)
+{
+    QString s = "  " + command;
+    if (s.length() > 28)
+        s += "\n" + QString().fill(' ', 30);
+    else
+        s += QString().fill(' ', 30 - s.length());
+    s += description;
+    writeLine(s);
+}
+
 /*============================== Private methods ===========================*/
 
 void TerminalIOHandler::handleConnect(const QString &, const QStringList &args)
@@ -96,6 +276,49 @@ void TerminalIOHandler::handleRemote(const QString &cmd, const QStringList &args
         return handleRemote(cmd.mid(7), args);
     QMetaObject::invokeMethod(this, "sendCommand", Qt::QueuedConnection, Q_ARG(QString, cmd),
                               Q_ARG(QStringList, QStringList(args)));
+}
+
+void TerminalIOHandler::handleSetLocal(const QString &, const QStringList &args)
+{
+    init_once(SettingsItem, Settings, SettingsItem())
+    {
+        SettingsItem l("Log");
+          l.addChildItem("noop", QVariant::Bool);
+        Settings.addChildItem(l);
+    }
+    if (args.size() < 1 || args.size() > 2)
+        return writeLine(tr("Invalid parameters", ""));
+    QString path = args.first();
+    SettingsItem si = Settings.testPath(path);
+    if (QVariant::Invalid == si.type())
+        return writeLine(tr("No such option", ""));
+    path.replace('.', '/');
+    QVariant v;
+    if (args.size() == 2)
+        v = args.last();
+    else
+        v = readLine(tr("Enter value for", "") + " \"" + path.split("/").last() + "\": ");
+    if (!v.convert(si.type()))
+        return writeLine(tr("Invalid value", ""));
+    bSettings->setValue(path, v);
+    writeLine(tr("OK", ""));
+}
+
+void TerminalIOHandler::handleHelp(const QString &, const QStringList &)
+{
+    writeLine(tr("The following commands are available:", "help"));
+    writeHelpLine("help", tr("Show this Help", "help"));
+    writeHelpLine("quit, exit", tr("Quit the application", "help"));
+    writeHelpLine("remote-quit, remote-exit", tr("Quit the remote server application", "help"));
+    writeHelpLine("connect", tr("Connect to a remote server", "help"));
+    writeHelpLine("disconnect", tr("Disconnect from the remote server", "help"));
+    writeHelpLine("uptime", tr("Show for how long the remote server application has been running", "help"));
+    writeHelpLine("user [--list], user [--connected-at|--info|--kick|--uptime] <id|login>",
+                  tr("Show information about the user(s) connected", "help"));
+    writeHelpLine("set <key> [value]", tr("Set remote server configuration variable", "help"));
+    writeHelpLine("local-set <key> [value]", tr("Set local configuration variable", "help"));
+    writeHelpLine("start", tr("Start the main server and the registration server", "help"));
+    writeHelpLine("stop", tr("Stop the main server and the registration server", "help"));
 }
 
 /*============================== Private slots =============================*/
@@ -154,10 +377,13 @@ void TerminalIOHandler::disconnectFromHost()
     }
 }
 
-void TerminalIOHandler::sendCommand(const QString &cmd, const QStringList &args)
+bool TerminalIOHandler::sendCommand(const QString &cmd, const QStringList &args)
 {
     if (!muserId)
-        return writeLine(tr("Not authoized", ""));
+    {
+        writeLine(tr("Not authoized", ""));
+        return false;
+    }
     QVariantMap out;
     out.insert("command", cmd);
     out.insert("arguments", args);
@@ -165,12 +391,14 @@ void TerminalIOHandler::sendCommand(const QString &cmd, const QStringList &args)
     if (!op->isFinished() && !op->isError() && !op->waitForFinished())
     {
         op->deleteLater();
-        return writeLine(tr("Operation error", ""));
+        writeLine(tr("Operation error", ""));
+        return false;
     }
     op->deleteLater();
     TOperationResult r = op->variantData().toMap().value("operation_result").value<TOperationResult>();
     if (!r)
         writeLine(tr("Failed to execute command. The following error occured:", "") + " " + r.errorString());
+    return r;
 }
 
 void TerminalIOHandler::disconnected()
@@ -201,7 +429,12 @@ void TerminalIOHandler::remoteRequest(BNetworkOperation *op)
         QString text = in.value("text").toString();
         BTerminalIOHandler::write(text);
     }
-    mremote->sendReply(op, QByteArray());
+    else if (op->metaData().operation() == "noop")
+    {
+        if (bSettings->value("Log/noop").toBool())
+            bLogger->log(tr("Replying to connection test...", "log"));
+    }
+    mremote->sendReply(op);
     op->waitForFinished();
     op->deleteLater();
 }
