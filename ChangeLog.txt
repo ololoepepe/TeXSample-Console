@@ -1,2 +1,6 @@
+=== TeXSample Console 0.1.1 (29 June 2013) ===
+    * Implement "help" command
+    * Implement "local-set" command
+
 === TeXSample Console 0.1.0 (22 June 2013) ===
     * First release
