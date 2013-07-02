@@ -1,3 +1,8 @@
+=== TeXSample Console 0.2.0 (02 July 2013) ===
+    * Use BeQt 2.1.0
+    * Use TeXSample 0.2.0
+    * Improve logging
+
 === TeXSample Console 0.1.1 (29 June 2013) ===
     * Implement "help" command
     * Implement "local-set" command
