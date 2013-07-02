@@ -19,12 +19,6 @@
         <translation>Введите логин:</translation>
     </message>
     <message>
-        <location filename="../src/terminaliohandler.cpp" line="256"/>
-        <location filename="../src/terminaliohandler.cpp" line="263"/>
-        <source>Canceled</source>
-        <translation>Отменено</translation>
-    </message>
-    <message>
         <location filename="../src/terminaliohandler.cpp" line="257"/>
         <source>Enter password:</source>
         <translation>Введите пароль:</translation>
@@ -115,18 +109,6 @@
         <translation>Установить значение локальной переменной конфигурации</translation>
     </message>
     <message>
-        <location filename="../src/terminaliohandler.cpp" line="320"/>
-        <source>Start the main server and the registration server</source>
-        <comment>help</comment>
-        <translation>Запустить главный сервер и сервер регистрации</translation>
-    </message>
-    <message>
-        <location filename="../src/terminaliohandler.cpp" line="321"/>
-        <source>Stop the main server and the registration server</source>
-        <comment>help</comment>
-        <translation>Остановить главный сервер и сервер регистрации</translation>
-    </message>
-    <message>
         <location filename="../src/terminaliohandler.cpp" line="329"/>
         <source>Already connected to</source>
         <translation>Уже подключен к</translation>
@@ -173,12 +155,6 @@
         <translation>Ошибка:</translation>
     </message>
     <message>
-        <location filename="../src/terminaliohandler.cpp" line="435"/>
-        <source>Replying to connection test...</source>
-        <comment>log</comment>
-        <translation>Отвечаем на проверку соединения...</translation>
-    </message>
-    <message>
         <location filename="../src/terminaliohandler.cpp" line="407"/>
         <source>Disconnected</source>
         <translation>Отключен</translation>
@@ -187,6 +163,24 @@
         <location filename="../src/terminaliohandler.cpp" line="384"/>
         <source>Not authoized</source>
         <translation>Не авторизован</translation>
+    </message>
+    <message>
+        <location filename="../src/terminaliohandler.cpp" line="256"/>
+        <location filename="../src/terminaliohandler.cpp" line="263"/>
+        <source>Operation canceled</source>
+        <translation>Операция отменена</translation>
+    </message>
+    <message>
+        <location filename="../src/terminaliohandler.cpp" line="320"/>
+        <source>Start the main server and the auxiliary servers</source>
+        <comment>help</comment>
+        <translation>Запустить главный сервер и вспомогательные серверы</translation>
+    </message>
+    <message>
+        <location filename="../src/terminaliohandler.cpp" line="321"/>
+        <source>Stop the main server and the auxiliary servers</source>
+        <comment>help</comment>
+        <translation>Остановить главный сервер и вспомогательные серверы</translation>
     </message>
     <message>
         <location filename="../src/terminaliohandler.cpp" line="371"/>
@@ -207,12 +201,12 @@
 <context>
     <name>main</name>
     <message>
-        <location filename="../src/main.cpp" line="41"/>
+        <location filename="../src/main.cpp" line="38"/>
         <source>This is</source>
         <translation>Это</translation>
     </message>
     <message>
-        <location filename="../src/main.cpp" line="52"/>
+        <location filename="../src/main.cpp" line="49"/>
         <source>Enter &quot;help&quot; to see commands list</source>
         <translation>Введите &quot;help&quot; чтобы посмотреть список команд</translation>
     </message>

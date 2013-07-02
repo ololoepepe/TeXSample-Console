@@ -14,17 +14,14 @@
 
 #include <QDebug>
 
-QString translate(const char *context, const char *key, const char *disambiguation = 0)
-{
-    return QCoreApplication::translate(context, key, disambiguation);
-}
+B_DECLARE_TRANSLATE_FUNCTION
 
 int main(int argc, char *argv[])
 {
     tRegister();
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName("TeXSample Console");
-    QCoreApplication::setApplicationVersion("0.1.1");
+    QCoreApplication::setApplicationVersion("0.2.0");
     QCoreApplication::setOrganizationName("TeXSample Team");
     QCoreApplication::setOrganizationDomain("https://github.com/TeXSample-Team/TeXSample-Console");
 #if defined(BUILTIN_RESOURCES)
@@ -38,7 +35,7 @@ int main(int argc, char *argv[])
     BCoreApplication::installTranslator(new BTranslator("texsample"));
     BCoreApplication::installTranslator(new BTranslator("texsample-console"));
     Q_UNUSED(bapp);
-    TerminalIOHandler::writeLine(translate("main", "This is", "") + " " + QCoreApplication::applicationName() +
+    TerminalIOHandler::writeLine(translate("main", "This is") + " " + QCoreApplication::applicationName() +
                                  " v" + QCoreApplication::applicationVersion());
     BDirTools::createUserLocation("logs");
     BCoreApplication::logger()->setDateTimeFormat("yyyy.MM.dd hh:mm:ss");
@@ -51,5 +48,10 @@ int main(int argc, char *argv[])
         handler.connectToHost(args.at(1));
     TerminalIOHandler::writeLine(translate("main", "Enter \"help\" to see commands list"));
     ret = app.exec();
+#if defined(BUILTIN_RESOURCES)
+    Q_CLEANUP_RESOURCE(texsample_console);
+    Q_CLEANUP_RESOURCE(texsample_console_translations);
+#endif
+    tCleanup();
     return ret;
 }
