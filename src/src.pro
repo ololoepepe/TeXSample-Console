@@ -3,8 +3,9 @@ TARGET = texsample-console
 
 CONFIG += console release
 
-QT = core network
+QT = core concurrent network
 BEQT = core network
+TSMP = core
 
 isEmpty(BEQT_PREFIX) {
     #TODO: Add MacOS support
@@ -28,10 +29,12 @@ include($${TSMP_PREFIX}/depend.pri)
 
 SOURCES += \
     main.cpp \
-    terminaliohandler.cpp
+    terminaliohandler.cpp \
+    global.cpp
 
 HEADERS += \
-    terminaliohandler.h
+    terminaliohandler.h \
+    global.h
 
 TRANSLATIONS += \
     ../translations/texsample-console_ru.ts
