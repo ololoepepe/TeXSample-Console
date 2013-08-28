@@ -15,7 +15,15 @@ TeXSample Server (see: https://github.com/TeXSample-Team/TeXSample-Server).
  Overview
 ==============================================================================
 
-#overview
+TeXSample Console is a terminal client of the TeXSample service,
+used for administration purposes.
+
+TeXSample is an online service, which is for use in the environment of schools
+and institutions of higher education. With it, users can share the logically
+complete fragments of textbooks, such as theorems, examples, definitions, etc.
+
+In addition, TeXSample gives users a full-featured on-line compiler,
+which works just the same as a usual local compiler.
 
 ==============================================================================
  Dependencies
@@ -30,8 +38,8 @@ TeXSample Console is intended for use with Qt 5, or with Qt 4.8.
 In case of using Qt 4.8, some features may be missing.
 Support of Qt libraries' versions lower than 4.8.0 is not guaranteed.
 
-You will also need BeQt libraries version 2.1.0 or higher
-and TeXSample library version 0.2.0 or higher.
+You will also need BeQt libraries version 3.0.0 or higher
+and TeXSample library version 1.0.0 or higher.
 
 See: https://github.com/the-dark-angel/BeQt
 and https://github.com/TeXSample-Team/TeXSample for details.

@@ -5,6 +5,7 @@ class BNetworkConnection;
 class BNetworkOperation;
 
 class QStringList;
+class QVariant;
 
 #include <BTerminalIOHandler>
 
@@ -22,23 +23,28 @@ class TerminalIOHandler : public BTerminalIOHandler
 public:
     explicit TerminalIOHandler(QObject *parent = 0);
     ~TerminalIOHandler();
-public:
-    void connectToHost(const QString &hostName);
+public slots:
+    bool connectToHost(const QString &hostName);
+    bool disconnectFromHost();
+    bool showUptime();
+    bool user(const QStringList &args);
+    bool startServer(const QString &address = QString());
+    bool stopServer();
+protected:
+    bool handleCommand(const QString &command, const QStringList &arguments);
 private:
-    static void writeHelpLine(const QString &command, const QString &description);
+    static QString msecsToString(qint64 msecs);
+    static QString userPrefix(const QVariantMap &userData);
 private:
-    void handleConnect(const QString &cmd, const QStringList &args);
-    void handleDisconnect(const QString &cmd, const QStringList &args);
-    void handleRemote(const QString &cmd, const QStringList &args);
-    void handleSetLocal(const QString &cmd, const QStringList &args);
-    void handleHelp(const QString &cmd, const QStringList &args);
+    bool handleConnect(const QString &cmd, const QStringList &args);
+    bool handleDisconnect(const QString &cmd, const QStringList &args);
+    bool handleUptime(const QString &cmd, const QStringList &args);
+    bool handleUser(const QString &cmd, const QStringList &args);
+    bool handleStart(const QString &cmd, const QStringList &args);
+    bool handleStop(const QString &cmd, const QStringList &args);
 private slots:
-    void connectToHost(const QString &hostName, const QString &login, const QString &password);
-    void disconnectFromHost();
-    bool sendCommand(const QString &cmd, const QStringList &args);
     void disconnected();
     void error(QAbstractSocket::SocketError err);
-    void remoteRequest(BNetworkOperation *op);
 private:
     BNetworkConnection *mremote;
     quint64 muserId;

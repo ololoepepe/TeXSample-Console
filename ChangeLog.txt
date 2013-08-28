@@ -1,3 +1,9 @@
+=== TeXSample Console 1.0.0 (xx August 2013) ===
+    * Use BeQt 3.0.0
+    * Use TeXSample 1.0.0
+    * Change the license to GNU GPLv3
+    * Add default command handler
+
 === TeXSample Console 0.2.0 (02 July 2013) ===
     * Use BeQt 2.1.0
     * Use TeXSample 0.2.0

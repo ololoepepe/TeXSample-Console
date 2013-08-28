@@ -1,8 +1,11 @@
 #include "terminaliohandler.h"
+#include "global.h"
 
 #include <TeXSample>
 #include <TOperationResult>
 #include <TClientInfo>
+#include <TMessage>
+#include <TAccessLevel>
 
 #include <BNetworkConnection>
 #include <BGenericSocket>
@@ -10,6 +13,8 @@
 #include <BNetworkOperation>
 #include <BLogger>
 #include <BCoreApplication>
+#include <BSettingsNode>
+#include <BTranslation>
 
 #include <QObject>
 #include <QString>
@@ -21,169 +26,40 @@
 #include <QCryptographicHash>
 #include <QAbstractSocket>
 #include <QSettings>
+#include <QDateTime>
 
 #include <QDebug>
+#include <QThread>
 
-/*============================================================================
-================================ SettingsItem ================================
-============================================================================*/
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+Q_DECLARE_METATYPE(QUuid)
+#endif
 
-class SettingsItem
+B_DECLARE_TRANSLATE_FUNCTION
+
+static bool handleNoopRequest(BNetworkOperation *op)
 {
-public:
-    explicit SettingsItem();
-    explicit SettingsItem(const QString &key, QVariant::Type t = QVariant::String);
-    SettingsItem(const SettingsItem &other);
-public:
-    void setKey(const QString &key);
-    void setType(const QVariant::Type t);
-    void setProperty(const QString &name, const QVariant &value = QVariant());
-    void addChildItem(const SettingsItem &item);
-    void addChildItem(const QString &key, QVariant::Type t = QVariant::String);
-    void removeChildItem(const QString &key);
-    QString key() const;
-    QVariant::Type type() const;
-    QVariant property(const QString &name) const;
-    QList<SettingsItem> childItems() const;
-    SettingsItem testPath(const QString &path, const QChar &separator = '.') const;
-public:
-    SettingsItem &operator =(const SettingsItem &other);
-    bool operator ==(const SettingsItem &other) const;
-private:
-    QString mkey;
-    QVariant::Type mtype;
-    QVariantMap mproperties;
-    QList<SettingsItem> mchildren;
-};
-
-/*============================================================================
-================================ SettingsItem ================================
-============================================================================*/
-
-/*============================== Public constructors =======================*/
-
-SettingsItem::SettingsItem()
-{
-    mtype = QVariant::Invalid;
+    bLogger->logInfo("Replying to connection test...");
+    op->reply();
+    if (!op->waitForFinished())
+        bLogger->logCritical("Operation error");
+    return true;
 }
 
-SettingsItem::SettingsItem(const QString &key, QVariant::Type t)
+static bool handleLogRequest(BNetworkOperation *op)
 {
-    mkey = key;
-    mtype = t;
+    QVariantMap in = op->variantData().toMap();
+    op->reply();
+    bLog(in.value("text").toString(), static_cast<BLogger::Level>(in.value("level").toInt()));
+    return true;
 }
 
-SettingsItem::SettingsItem(const SettingsItem &other)
+static bool handleMessageRequest(BNetworkOperation *op)
 {
-    *this = other;
-}
-
-/*============================== Public methods ============================*/
-
-void SettingsItem::setKey(const QString &key)
-{
-    mkey = key;
-}
-
-void SettingsItem::setType(const QVariant::Type t)
-{
-    mtype = t;
-}
-
-void SettingsItem::setProperty(const QString &name, const QVariant &value)
-{
-    if (name.isEmpty())
-        return;
-    if (value.isValid())
-        mproperties[name] = value;
-    else
-        mproperties.remove(name);
-}
-
-void SettingsItem::addChildItem(const SettingsItem &item)
-{
-    if (item.key().isEmpty() || QVariant::Invalid == item.type() || mchildren.contains(item))
-        return;
-    mchildren << item;
-}
-
-void SettingsItem::addChildItem(const QString &key, QVariant::Type t)
-{
-    addChildItem(SettingsItem(key, t));
-}
-
-void SettingsItem::removeChildItem(const QString &key)
-{
-    if (key.isEmpty())
-        return;
-    mchildren.removeAll(SettingsItem(key));
-}
-
-QString SettingsItem::key() const
-{
-    return mkey;
-}
-
-QVariant::Type SettingsItem::type() const
-{
-    return mtype;
-}
-
-QVariant SettingsItem::property(const QString &name) const
-{
-    return mproperties.value(name);
-}
-
-QList<SettingsItem> SettingsItem::childItems() const
-{
-    return mchildren;
-}
-
-SettingsItem SettingsItem::testPath(const QString &path, const QChar &separator) const
-{
-    if (path.isEmpty())
-        return SettingsItem();
-    if (mkey.isEmpty())
-    {
-        foreach (const SettingsItem &i, mchildren)
-        {
-            SettingsItem si = i.testPath(path, separator);
-            if (QVariant::Invalid != si.type())
-                return si;
-        }
-    }
-    else
-    {
-        QStringList sl = path.split(!separator.isNull() ? separator : QChar('.'));
-        if (sl.takeFirst() != mkey)
-            return SettingsItem();
-        QString spath = sl.join(QString(separator));
-        if (spath.isEmpty())
-            return *this;
-        foreach (const SettingsItem &i, mchildren)
-        {
-            SettingsItem si = i.testPath(spath, separator);
-            if (QVariant::Invalid != si.type())
-                return si;
-        }
-    }
-    return SettingsItem();
-}
-
-/*============================== Public operators ==========================*/
-
-SettingsItem &SettingsItem::operator =(const SettingsItem &other)
-{
-    mkey = other.mkey;
-    mtype = other.mtype;
-    mproperties = other.mproperties;
-    mchildren = other.mchildren;
-    return *this;
-}
-
-bool SettingsItem::operator ==(const SettingsItem &other) const
-{
-    return mkey == other.mkey; //TODO
+    TMessage msg = op->variantData().toMap().value("message").toInt();
+    op->reply();
+    bWriteLine(msg.messageString());
+    return true;
 }
 
 /*============================================================================
@@ -197,24 +73,77 @@ TerminalIOHandler::TerminalIOHandler(QObject *parent) :
 {
     muserId = 0;
     mremote = new BNetworkConnection(BGenericSocket::TcpSocket, this);
-    mremote->setLogger(new BLogger);
-    mremote->logger()->setLogToConsoleEnabled(false);
+    mremote->installRequestHandler(BNetworkConnection::operation(BNetworkConnection::NoopOperation),
+                                   &handleNoopRequest);
+    mremote->installRequestHandler(Texsample::LogRequest, &handleLogRequest);
+    mremote->installRequestHandler(Texsample::MessageRequest, &handleMessageRequest);
     connect(mremote, SIGNAL(disconnected()), this, SLOT(disconnected()));
     connect(mremote, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(error(QAbstractSocket::SocketError)));
-    connect(mremote, SIGNAL(requestReceived(BNetworkOperation *)), this, SLOT(remoteRequest(BNetworkOperation *)));
-    installHandler("quit", &BeQt::handleQuit);
-    installHandler("exit", &BeQt::handleQuit);
+    installHandler(QuitCommand);
+    installHandler(SetCommand);
+    installHandler(HelpCommand);
     installHandler("connect", (InternalHandler) &TerminalIOHandler::handleConnect);
     installHandler("disconnect", (InternalHandler) &TerminalIOHandler::handleDisconnect);
-    installHandler("remote-quit", (InternalHandler) &TerminalIOHandler::handleRemote);
-    installHandler("remote-exit", (InternalHandler) &TerminalIOHandler::handleRemote);
-    installHandler("user", (InternalHandler) &TerminalIOHandler::handleRemote);
-    installHandler("uptime", (InternalHandler) &TerminalIOHandler::handleRemote);
-    installHandler("set", (InternalHandler) &TerminalIOHandler::handleRemote);
-    installHandler("start", (InternalHandler) &TerminalIOHandler::handleRemote);
-    installHandler("stop", (InternalHandler) &TerminalIOHandler::handleRemote);
-    installHandler("local-set", (InternalHandler) &TerminalIOHandler::handleSetLocal);
-    installHandler("help", (InternalHandler) &TerminalIOHandler::handleHelp);
+    installHandler("uptime", (InternalHandler) &TerminalIOHandler::handleUptime);
+    installHandler("user", (InternalHandler) &TerminalIOHandler::handleUser);
+    installHandler("start", (InternalHandler) &TerminalIOHandler::handleStart);
+    installHandler("stop", (InternalHandler) &TerminalIOHandler::handleStop);
+    BSettingsNode *root = new BSettingsNode;
+      BSettingsNode *n = new BSettingsNode("Log", root);
+        BSettingsNode *nn = new BSettingsNode("mode", n);
+          nn->setUserSetFunction(&Global::setLoggingMode);
+          nn->setDescription(BTranslation::translate("BSettingsNode", "Logging mode. Possible values:\n"
+                                                     "0 or less - don't log\n"
+                                                     "1 - log to console only\n"
+                                                     "2 - log to file only\n"
+                                                     "3 and more - log to console and file\n"
+                                                     "The default is 2"));
+        nn = new BSettingsNode("noop", n);
+          nn->setDescription(BTranslation::translate("BSettingsNode", "Logging the \"keep alive\" operations. "
+                                                     "Possible values:\n"
+                                                     "0 or less - don't log\n"
+                                                     "1 - log locally\n"
+                                                     "2 and more - log loaclly and remotely\n"
+                                                     "The default is 0"));
+    setRootSettingsNode(root);
+    setHelpDescription(BTranslation::translate("BTerminalIOHandler", "This is TeXSample Console. "
+                                               "Enter \"help --all\" to see full Help"));
+    CommandHelpList chl;
+    CommandHelp ch;
+    ch.usage = "connect [address]";
+    ch.description = BTranslation::translate("BTerminalIOHandler", "Connect to a remote server. "
+                                             "If address is not specified, texsample-server.no-ip.org is used");
+    setCommandHelp("connect", ch);
+    ch.usage = "disconnect";
+    ch.description = BTranslation::translate("BTerminalIOHandler", "Disconnect from the remote server");
+    setCommandHelp("connect", ch);
+    ch.usage = "uptime";
+    ch.description = BTranslation::translate("BTerminalIOHandler",
+                                             "Show for how long the server has been running");
+    setCommandHelp("uptime", ch);
+    ch.usage = "user [--list]";
+    ch.description = BTranslation::translate("BTerminalIOHandler", "Show connected user count or list them all");
+    chl << ch;
+    ch.usage = "user --connected-at|--info|--uptime <id|login>";
+    ch.description = BTranslation::translate("BTerminalIOHandler", "Show information about the user. "
+                                             "The user may be specified by id or by login. Options:\n"
+                                             "  --connected-at - time when the user connected\n"
+                                             "  --info - detailed user information\n"
+                                             "  --uptime - for how long the user has been connected");
+    chl << ch;
+    ch.usage = "user --kick <id|login>";
+    ch.description = BTranslation::translate("BTerminalIOHandler", "Disconnect the specified user. "
+                                             "If login is specified, all connections of this user will be closed");
+    chl << ch;
+    setCommandHelp("user", chl);
+    ch.usage = "start [address]";
+    ch.description = BTranslation::translate("BTerminalIOHandler", "Start the server. "
+                                             "If address is specified, the server will only listen on that address, "
+                                             "otherwise it will listen on available all addresses.");
+    setCommandHelp("start", ch);
+    ch.usage = "stop";
+    ch.description = BTranslation::translate("BTerminalIOHandler", "Stop the server. Users are NOT disconnected");
+    setCommandHelp("stop", ch);
 }
 
 TerminalIOHandler::~TerminalIOHandler()
@@ -222,136 +151,56 @@ TerminalIOHandler::~TerminalIOHandler()
     //
 }
 
-/*============================== Public methods ============================*/
+/*============================== Public slots =============================*/
 
-void TerminalIOHandler::connectToHost(const QString &hostName)
-{
-    if (hostName.isEmpty())
-        return;
-    writeLine(tr("Connecting to", "") + " " + hostName + "...");
-    handleConnect("connect", QStringList() << hostName);
-}
-
-/*============================== Static private methods ====================*/
-
-void TerminalIOHandler::writeHelpLine(const QString &command, const QString &description)
-{
-    QString s = "  " + command;
-    if (s.length() > 28)
-        s += "\n" + QString().fill(' ', 30);
-    else
-        s += QString().fill(' ', 30 - s.length());
-    s += description;
-    writeLine(s);
-}
-
-/*============================== Private methods ===========================*/
-
-void TerminalIOHandler::handleConnect(const QString &, const QStringList &args)
-{
-    if (args.size() != 1)
-        return writeLine(tr("Invalid usage") + "\nconnect <host>");
-    QString login = readLine(tr("Enter login:") + " ");
-    if (login.isEmpty())
-        return writeLine(tr("Operation canceled"));
-    write(tr("Enter password:") + " ");
-    setStdinEchoEnabled(false);
-    QString password = readLine();
-    setStdinEchoEnabled(true);
-    writeLine("");
-    if (password.isEmpty())
-        return writeLine(tr("Operation canceled"));
-    QMetaObject::invokeMethod(this, "connectToHost", Qt::QueuedConnection, Q_ARG(QString, args.first()),
-                              Q_ARG(QString, login), Q_ARG(QString, password));
-}
-
-void TerminalIOHandler::handleDisconnect(const QString &, const QStringList &)
-{
-    QMetaObject::invokeMethod(this, "disconnectFromHost", Qt::QueuedConnection);
-}
-
-void TerminalIOHandler::handleRemote(const QString &cmd, const QStringList &args)
-{
-    if (cmd.startsWith("remote-"))
-        return handleRemote(cmd.mid(7), args);
-    QMetaObject::invokeMethod(this, "sendCommand", Qt::QueuedConnection, Q_ARG(QString, cmd),
-                              Q_ARG(QStringList, QStringList(args)));
-}
-
-void TerminalIOHandler::handleSetLocal(const QString &, const QStringList &args)
-{
-    init_once(SettingsItem, Settings, SettingsItem())
-    {
-        SettingsItem l("Log");
-          l.addChildItem("noop", QVariant::Bool);
-        Settings.addChildItem(l);
-    }
-    if (args.size() < 1 || args.size() > 2)
-        return writeLine(tr("Invalid parameters"));
-    QString path = args.first();
-    SettingsItem si = Settings.testPath(path);
-    if (QVariant::Invalid == si.type())
-        return writeLine(tr("No such option"));
-    path.replace('.', '/');
-    QVariant v;
-    if (args.size() == 2)
-        v = args.last();
-    else
-        v = readLine(tr("Enter value for") + " \"" + path.split("/").last() + "\": ");
-    if (!v.convert(si.type()))
-        return writeLine(tr("Invalid value"));
-    bSettings->setValue(path, v);
-    writeLine(tr("OK"));
-}
-
-void TerminalIOHandler::handleHelp(const QString &, const QStringList &)
-{
-    writeLine(tr("The following commands are available:", "help"));
-    writeHelpLine("help", tr("Show this Help", "help"));
-    writeHelpLine("quit, exit", tr("Quit the application", "help"));
-    writeHelpLine("remote-quit, remote-exit", tr("Quit the remote server application", "help"));
-    writeHelpLine("connect", tr("Connect to a remote server", "help"));
-    writeHelpLine("disconnect", tr("Disconnect from the remote server", "help"));
-    writeHelpLine("uptime", tr("Show for how long the remote server application has been running", "help"));
-    writeHelpLine("user [--list], user [--connected-at|--info|--kick|--uptime] <id|login>",
-                  tr("Show information about the user(s) connected", "help"));
-    writeHelpLine("set <key> [value]", tr("Set remote server configuration variable", "help"));
-    writeHelpLine("local-set <key> [value]", tr("Set local configuration variable", "help"));
-    writeHelpLine("start", tr("Start the main server and the auxiliary servers", "help"));
-    writeHelpLine("stop", tr("Stop the main server and the auxiliary servers", "help"));
-}
-
-/*============================== Private slots =============================*/
-
-void TerminalIOHandler::connectToHost(const QString &hostName, const QString &login, const QString &password)
+bool TerminalIOHandler::connectToHost(const QString &hostName)
 {
     if (mremote->isConnected())
-        return write(tr("Already connected to") + " " + mremote->peerAddress());
-    mremote->connectToHost(hostName, 9041);
+    {
+        write(tr("Already connected to") + " " + mremote->peerAddress());
+        return false;
+    }
+    QString hn = !hostName.isEmpty() ? hostName : QString("texsample-server.no-ip.org");
+    QString login = readLine(tr("Enter login:") + " ");
+    if (login.isEmpty())
+    {
+        writeLine(tr("Operation aborted"));
+        return false;
+    }
+    QString pwd = readLineSecure(tr("Enter password:") + " ");
+    if (pwd.isEmpty())
+    {
+        writeLine(tr("Operation aborted"));
+        return false;
+    }
+    writeLine(tr("Connecting to", "") + " " + hn + "...");
+    mremote->connectToHost(hn, Texsample::MainPort);
     if (!mremote->isConnected() && !mremote->waitForConnected())
     {
         mremote->close();
-        writeLine(tr("Failed to connect to") + " " + hostName);
-        return;
+        writeLine(tr("Failed to connect to") + " " + hn);
+        return false;
     }
-    writeLine(tr("Connected to") + " " + hostName + ". " + tr("Authorizing..."));
+    writeLine(tr("Connected to") + " " + hn + ". " + tr("Authorizing..."));
     QVariantMap out;
     out.insert("login", login);
-    out.insert("password", QCryptographicHash::hash(password.toUtf8(), QCryptographicHash::Sha1));
-    out.insert("client_info", TClientInfo::createDefaultInfo());
+    out.insert("password", QCryptographicHash::hash(pwd.toUtf8(), QCryptographicHash::Sha1));
+    out.insert("client_info", TClientInfo::createInfo());
     out.insert("subscription", true);
     BNetworkOperation *op = mremote->sendRequest(Texsample::AuthorizeRequest, out);
     if (!op->isFinished() && !op->isError() && !op->waitForFinished())
     {
         op->cancel();
         op->deleteLater();
-        return writeLine(tr("Authorization timed out"));
+        writeLine(tr("Authorization timed out"));
+        return false;
     }
     op->deleteLater();
     if (op->isError())
     {
         mremote->close();
-        return writeLine(tr("Operation error"));
+        writeLine(tr("Operation error"));
+        return false;
     }
     QVariantMap in = op->variantData().toMap();
     TOperationResult r = in.value("operation_result").value<TOperationResult>();
@@ -359,25 +208,55 @@ void TerminalIOHandler::connectToHost(const QString &hostName, const QString &lo
     if (!r)
     {
         mremote->close();
-        return writeLine(tr("Authorization failed. The following error occured:") + " " + r.errorString());
+        writeLine(tr("Authorization failed. The following error occured:") + " " + r.messageString());
+        return false;
     }
     muserId = id;
     writeLine(tr("Authorized successfully with user id") + " " + QString::number(id));
+    return true;
 }
 
-void TerminalIOHandler::disconnectFromHost()
+bool TerminalIOHandler::disconnectFromHost()
 {
     if (!mremote->isConnected())
-        return writeLine(tr("Not connected"));
+    {
+        writeLine(tr("Not connected"));
+        return false;
+    }
     mremote->disconnectFromHost();
     if (mremote->isConnected() && !mremote->waitForDisconnected())
     {
         mremote->close();
-        return writeLine(tr("Disconnect timeout, socket closed"));
+        writeLine(tr("Disconnect timeout, socket closed"));
     }
+    return true;
 }
 
-bool TerminalIOHandler::sendCommand(const QString &cmd, const QStringList &args)
+bool TerminalIOHandler::showUptime()
+{
+    if (!muserId)
+    {
+        writeLine(tr("Not authoized"));
+        return false;
+    }
+    BNetworkOperation *op = mremote->sendRequest(Texsample::UptimeRequest);
+    if (!op->isFinished() && !op->isError() && !op->waitForFinished())
+    {
+        op->deleteLater();
+        writeLine(tr("Operation error"));
+        return false;
+    }
+    op->deleteLater();
+    QVariantMap in = op->variantData().toMap();
+    TOperationResult r = in.value("operation_result").value<TOperationResult>();
+    if (r)
+        writeLine(tr("Uptime:") + " " + msecsToString(in.value("msecs").toLongLong()));
+    else
+        writeLine(tr("Failed to show uptime. The following error occured:") + " " + r.messageString());
+    return r;
+}
+
+bool TerminalIOHandler::user(const QStringList &args)
 {
     if (!muserId)
     {
@@ -385,9 +264,93 @@ bool TerminalIOHandler::sendCommand(const QString &cmd, const QStringList &args)
         return false;
     }
     QVariantMap out;
-    out.insert("command", cmd);
-    out.insert("arguments", args);
-    BNetworkOperation *op = mremote->sendRequest(Texsample::ExecuteCommandRequest, out);
+    if (!args.isEmpty())
+        out.insert("arguments", args);
+    BNetworkOperation *op = mremote->sendRequest(Texsample::UserRequest, out);
+    if (!op->isFinished() && !op->isError() && !op->waitForFinished())
+    {
+        op->deleteLater();
+        writeLine(tr("Operation error"));
+        return false;
+    }
+    op->deleteLater();
+    QVariantMap in = op->variantData().toMap();
+    TOperationResult r = in.value("operation_result").value<TOperationResult>();
+    if (r)
+    {
+        QVariant result = in.value("result");
+        if (args.isEmpty())
+        {
+            writeLine(tr("Connected user count:") + " " + QString::number(result.toInt()));
+        }
+        else if (args.first() == "--list")
+        {
+            QVariantList l = result.toList();
+            int sz = l.size();
+            if (sz)
+                writeLine(tr("Listing connected users") + " (" + QString::number(sz) + "):");
+            else
+                writeLine(tr("There are no connected users"));
+            foreach (const QVariant &v, l)
+                writeLine(userPrefix(v.toMap()));
+        }
+        else if (args.size() == 2)
+        {
+            if (args.first() == "--kick")
+            {
+                writeLine(r.messageString());
+            }
+            else if (args.first() == "--info")
+            {
+                foreach (const QVariant &v, result.toList())
+                {
+                    QVariantMap m = v.toMap();
+                    QString f = "[%u] [%p] %i\n%a; %o [%l]\nClient v%v; TeXSample v%t; BeQt v%b; Qt v%q";
+                    f.replace("%l", m.value("locale").toLocale().name());
+                    QString s = m.value("client_info").value<TClientInfo>().toString(f);
+                    s.replace("%d", QString::number(m.value("user_id").toULongLong()));
+                    s.replace("%u", m.value("login").toString());
+                    s.replace("%p", m.value("address").toString());
+                    s.replace("%i", BeQt::pureUuidText(m.value("unique_id").value<QUuid>()));
+                    s.replace("%a", m.value("access_level").value<TAccessLevel>().toStringNoTr());
+                    writeLine(s);
+                }
+            }
+            else if (args.first() == "--uptime")
+            {
+                foreach (const QVariant &v, result.toList())
+                    writeLine(tr("Uptime of") + " " + userPrefix(v.toMap()) + " "
+                              + msecsToString(v.toMap().value("uptime").toLongLong()));
+            }
+            else if (args.first() == "--connected-at")
+            {
+                foreach (const QVariant &v, result.toList())
+                {
+                    QDateTime dt = v.toMap().value("connection_dt").toDateTime().toLocalTime();
+                    writeLine(tr("Connection time of") + " " + userPrefix(v.toMap()) + " "
+                              + dt.toString(bLogger->dateTimeFormat()));
+                }
+            }
+        }
+    }
+    else
+    {
+        writeLine(tr("Failed to execute request. The following error occured:") + " " + r.messageString());
+    }
+    return r;
+}
+
+bool TerminalIOHandler::startServer(const QString &address)
+{
+    if (!muserId)
+    {
+        writeLine(tr("Not authoized"));
+        return false;
+    }
+    QVariantMap out;
+    if (!address.isEmpty())
+        out.insert("address", address);
+    BNetworkOperation *op = mremote->sendRequest(Texsample::StartServerRequest, out);
     if (!op->isFinished() && !op->isError() && !op->waitForFinished())
     {
         op->deleteLater();
@@ -397,9 +360,99 @@ bool TerminalIOHandler::sendCommand(const QString &cmd, const QStringList &args)
     op->deleteLater();
     TOperationResult r = op->variantData().toMap().value("operation_result").value<TOperationResult>();
     if (!r)
-        writeLine(tr("Failed to execute command. The following error occured:") + " " + r.errorString());
+        writeLine(tr("Failed to start server. The following error occured:") + " " + r.messageString());
+    else
+        writeLine(r.messageString());
     return r;
 }
+
+bool TerminalIOHandler::stopServer()
+{
+    if (!muserId)
+    {
+        writeLine(tr("Not authoized"));
+        return false;
+    }
+    BNetworkOperation *op = mremote->sendRequest(Texsample::StopServerRequest);
+    if (!op->isFinished() && !op->isError() && !op->waitForFinished())
+    {
+        op->deleteLater();
+        writeLine(tr("Operation error"));
+        return false;
+    }
+    op->deleteLater();
+    TOperationResult r = op->variantData().toMap().value("operation_result").value<TOperationResult>();
+    if (!r)
+        writeLine(tr("Failed to stop server. The following error occured:") + " " + r.messageString());
+    else
+        writeLine(r.messageString());
+    return r;
+}
+
+/*============================== Protected methods =========================*/
+
+bool TerminalIOHandler::handleCommand(const QString &, const QStringList &)
+{
+    writeLine(tr("Unknown command. Enter \"help --commands\" to see the list of available commands"));
+    return false;
+}
+
+/*============================== Static private methods ====================*/
+
+QString TerminalIOHandler::msecsToString(qint64 msecs)
+{
+    QString days = QString::number(msecs / (24 * BeQt::Hour));
+    msecs %= (24 * BeQt::Hour);
+    QString hours = QString::number(msecs / BeQt::Hour);
+    hours.prepend(QString().fill('0', 2 - hours.length()));
+    msecs %= BeQt::Hour;
+    QString minutes = QString::number(msecs / BeQt::Minute);
+    minutes.prepend(QString().fill('0', 2 - minutes.length()));
+    msecs %= BeQt::Minute;
+    QString seconds = QString::number(msecs / BeQt::Second);
+    seconds.prepend(QString().fill('0', 2 - seconds.length()));
+    return days + " " + tr("days") + " " + hours + ":" + minutes + ":" + seconds;
+}
+
+QString TerminalIOHandler::userPrefix(const QVariantMap &m)
+{
+    return "[" + m.value("login").toString() + "] [" + m.value("address").toString() + "] ["
+            + BeQt::pureUuidText(m.value("unique_id").value<QUuid>()) + "]";
+}
+
+/*============================== Private methods ===========================*/
+
+bool TerminalIOHandler::handleConnect(const QString &, const QStringList &args)
+{
+    return connectToHost(!args.isEmpty() ? args.first() : QString());
+}
+
+bool TerminalIOHandler::handleDisconnect(const QString &, const QStringList &)
+{
+    return disconnectFromHost();
+}
+
+bool TerminalIOHandler::handleUptime(const QString &, const QStringList &)
+{
+    return showUptime();
+}
+
+bool TerminalIOHandler::handleUser(const QString &, const QStringList &args)
+{
+    return user(args);
+}
+
+bool TerminalIOHandler::handleStart(const QString &, const QStringList &args)
+{
+    return startServer(!args.isEmpty() ? args.first() : QString());
+}
+
+bool TerminalIOHandler::handleStop(const QString &, const QStringList &)
+{
+    return stopServer();
+}
+
+/*============================== Private slots =============================*/
 
 void TerminalIOHandler::disconnected()
 {
@@ -411,30 +464,4 @@ void TerminalIOHandler::error(QAbstractSocket::SocketError)
 {
     writeLine(tr("Error:") + " " + mremote->errorString());
     muserId = 0;
-}
-
-void TerminalIOHandler::remoteRequest(BNetworkOperation *op)
-{
-    QVariantMap in = op->variantData().toMap();
-    if (op->metaData().operation() == Texsample::LogRequest)
-    {
-        QString msg = in.value("log_text").toString();
-        int ilvl = in.value("level").toInt();
-        BLogger::Level lvl = bRangeD(BLogger::NoLevel, BLogger::CriticalLevel).contains(ilvl) ?
-                    static_cast<BLogger::Level>(ilvl) : BLogger::NoLevel;
-        BCoreApplication::log(msg, lvl);
-    }
-    else if (op->metaData().operation() == Texsample::WriteRequest)
-    {
-        QString text = in.value("text").toString();
-        BTerminalIOHandler::write(text);
-    }
-    else if (op->metaData().operation() == BNetworkConnection::NoopRequest)
-    {
-        if (bSettings->value("Log/noop").toBool())
-            bLogger->log("Replying to connection test...");
-    }
-    mremote->sendReply(op);
-    op->waitForFinished();
-    op->deleteLater();
 }

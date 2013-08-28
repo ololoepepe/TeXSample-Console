@@ -1,4 +1,5 @@
 #include "terminaliohandler.h"
+#include "global.h"
 
 #include <TeXSampleGlobal>
 
@@ -18,10 +19,10 @@ B_DECLARE_TRANSLATE_FUNCTION
 
 int main(int argc, char *argv[])
 {
-    tRegister();
+    tInit();
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName("TeXSample Console");
-    QCoreApplication::setApplicationVersion("0.2.0");
+    QCoreApplication::setApplicationVersion("1.0.0-pa1");
     QCoreApplication::setOrganizationName("TeXSample Team");
     QCoreApplication::setOrganizationDomain("https://github.com/TeXSample-Team/TeXSample-Console");
 #if defined(BUILTIN_RESOURCES)
@@ -34,19 +35,22 @@ int main(int argc, char *argv[])
     BCoreApplication::installTranslator(new BTranslator("beqt"));
     BCoreApplication::installTranslator(new BTranslator("texsample"));
     BCoreApplication::installTranslator(new BTranslator("texsample-console"));
+    BCoreApplication::setApplicationCopyrightPeriod("2013");
     Q_UNUSED(bapp);
-    TerminalIOHandler::writeLine(translate("main", "This is") + " " + QCoreApplication::applicationName() +
-                                 " v" + QCoreApplication::applicationVersion());
+    QString msg = QCoreApplication::applicationName() + " v" + QCoreApplication::applicationVersion();
+    BTerminalIOHandler::setTerminalTitle(msg);
+    bWriteLine(translate("main", "This is") + " " + msg);
     BDirTools::createUserLocation("logs");
     BCoreApplication::logger()->setDateTimeFormat("yyyy.MM.dd hh:mm:ss");
+    Global::resetLoggingMode();
     QString logfn = BCoreApplication::location(BCoreApplication::DataPath, BCoreApplication::UserResources) + "/logs/";
     logfn += QDateTime::currentDateTime().toString("yyyy.MM.dd-hh.mm.ss") + ".txt";
     BCoreApplication::logger()->setFileName(logfn);
     TerminalIOHandler handler;
+    bWriteLine(translate("main", "Enter \"help --commands\" to see the list of available commands"));
     QStringList args = QCoreApplication::arguments();
     if (args.size() > 1)
         handler.connectToHost(args.at(1));
-    TerminalIOHandler::writeLine(translate("main", "Enter \"help\" to see commands list"));
     ret = app.exec();
 #if defined(BUILTIN_RESOURCES)
     Q_CLEANUP_RESOURCE(texsample_console);
