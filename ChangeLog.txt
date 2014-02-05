@@ -1,4 +1,12 @@
-=== TeXSample Console 1.0.0 (xx August 2013) ===
+=== TeXSample Console 1.1.-beta (05 February 2014) ===
+    * Use QtGui (TeXSample 1.0.1 compatibility)
+    * Fix some strings
+    * Fix noop request handling
+    * Implement SetLatestAppVersionRequest operation
+    * Use BeQt 3.1.0
+    * Use TeXSample 1.2.0
+
+=== TeXSample Console 1.0.0-pa1 (28 August 2013) ===
     * Use BeQt 3.0.0
     * Use TeXSample 1.0.0
     * Change the license to GNU GPLv3

@@ -22,7 +22,7 @@ int main(int argc, char *argv[])
     tInit();
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName("TeXSample Console");
-    QCoreApplication::setApplicationVersion("1.0.0-pa1");
+    QCoreApplication::setApplicationVersion("1.1.0-beta");
     QCoreApplication::setOrganizationName("TeXSample Team");
     QCoreApplication::setOrganizationDomain("https://github.com/TeXSample-Team/TeXSample-Console");
 #if defined(BUILTIN_RESOURCES)
@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
     BCoreApplication::installTranslator(new BTranslator("beqt"));
     BCoreApplication::installTranslator(new BTranslator("texsample"));
     BCoreApplication::installTranslator(new BTranslator("texsample-console"));
-    BCoreApplication::setApplicationCopyrightPeriod("2013");
+    BCoreApplication::setApplicationCopyrightPeriod("2014");
     Q_UNUSED(bapp);
     QString msg = QCoreApplication::applicationName() + " v" + QCoreApplication::applicationVersion();
     BTerminalIOHandler::setTerminalTitle(msg);
