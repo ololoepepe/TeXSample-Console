@@ -28,6 +28,7 @@ public slots:
     bool disconnectFromHost();
     bool showUptime();
     bool user(const QStringList &args);
+    bool setAppVersion(const QStringList &args);
     bool startServer(const QString &address = QString());
     bool stopServer();
 protected:
@@ -40,6 +41,7 @@ private:
     bool handleDisconnect(const QString &cmd, const QStringList &args);
     bool handleUptime(const QString &cmd, const QStringList &args);
     bool handleUser(const QString &cmd, const QStringList &args);
+    bool handleSetAppVersion(const QString &cmd, const QStringList &args);
     bool handleStart(const QString &cmd, const QStringList &args);
     bool handleStop(const QString &cmd, const QStringList &args);
 private slots:

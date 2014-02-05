@@ -3,7 +3,7 @@ TARGET = texsample-console
 
 CONFIG += console release
 
-QT = core concurrent network
+QT = core concurrent network gui
 BEQT = core network
 TSMP = core
 

@@ -35,14 +35,11 @@
 Q_DECLARE_METATYPE(QUuid)
 #endif
 
-B_DECLARE_TRANSLATE_FUNCTION
-
 static bool handleNoopRequest(BNetworkOperation *op)
 {
-    bLogger->logInfo("Replying to connection test...");
+    if (bSettings->value("Log.noop").toInt() >= 1)
+        bLog("Replying to connection test...");
     op->reply();
-    if (!op->waitForFinished())
-        bLogger->logCritical("Operation error");
     return true;
 }
 
@@ -86,6 +83,7 @@ TerminalIOHandler::TerminalIOHandler(QObject *parent) :
     installHandler("disconnect", (InternalHandler) &TerminalIOHandler::handleDisconnect);
     installHandler("uptime", (InternalHandler) &TerminalIOHandler::handleUptime);
     installHandler("user", (InternalHandler) &TerminalIOHandler::handleUser);
+    installHandler("set-app-version", (InternalHandler) &TerminalIOHandler::handleSetAppVersion);
     installHandler("start", (InternalHandler) &TerminalIOHandler::handleStart);
     installHandler("stop", (InternalHandler) &TerminalIOHandler::handleStop);
     BSettingsNode *root = new BSettingsNode;
@@ -102,8 +100,7 @@ TerminalIOHandler::TerminalIOHandler(QObject *parent) :
           nn->setDescription(BTranslation::translate("BSettingsNode", "Logging the \"keep alive\" operations. "
                                                      "Possible values:\n"
                                                      "0 or less - don't log\n"
-                                                     "1 - log locally\n"
-                                                     "2 and more - log loaclly and remotely\n"
+                                                     "1 - log\n"
                                                      "The default is 0"));
     setRootSettingsNode(root);
     setHelpDescription(BTranslation::translate("BTerminalIOHandler", "This is TeXSample Console. "
@@ -144,6 +141,10 @@ TerminalIOHandler::TerminalIOHandler(QObject *parent) :
     ch.usage = "stop";
     ch.description = BTranslation::translate("BTerminalIOHandler", "Stop the server. Users are NOT disconnected");
     setCommandHelp("stop", ch);
+    ch.usage = "set-app-version cloudlab-client|tex-creator|texsample-console lin|mac|win <version> <url>";
+    ch.description = BTranslation::translate("BTerminalIOHandler",
+                                             "Set the latest version of an application along with the download URL");
+    setCommandHelp("set-app-version", ch);
 }
 
 TerminalIOHandler::~TerminalIOHandler()
@@ -305,7 +306,7 @@ bool TerminalIOHandler::user(const QStringList &args)
                 foreach (const QVariant &v, result.toList())
                 {
                     QVariantMap m = v.toMap();
-                    QString f = "[%u] [%p] %i\n%a; %o [%l]\nClient v%v; TeXSample v%t; BeQt v%b; Qt v%q";
+                    QString f = "[%u] [%p] [%i]\n%a; %o [%l]\n%c v%v; TeXSample v%t; BeQt v%b; Qt v%q";
                     f.replace("%l", m.value("locale").toLocale().name());
                     QString s = m.value("client_info").value<TClientInfo>().toString(f);
                     s.replace("%d", QString::number(m.value("user_id").toULongLong()));
@@ -337,6 +338,32 @@ bool TerminalIOHandler::user(const QStringList &args)
     {
         writeLine(tr("Failed to execute request. The following error occured:") + " " + r.messageString());
     }
+    return r;
+}
+
+bool TerminalIOHandler::setAppVersion(const QStringList &args)
+{
+    if (!muserId)
+    {
+        writeLine(tr("Not authoized"));
+        return false;
+    }
+    QVariantMap out;
+    if (!args.isEmpty())
+        out.insert("arguments", args);
+    BNetworkOperation *op = mremote->sendRequest(Texsample::SetLatestAppVersionRequest, out);
+    if (!op->isFinished() && !op->isError() && !op->waitForFinished())
+    {
+        op->deleteLater();
+        writeLine(tr("Operation error"));
+        return false;
+    }
+    op->deleteLater();
+    TOperationResult r = op->variantData().toMap().value("operation_result").value<TOperationResult>();
+    if (!r)
+        writeLine(tr("Failed to set app version. The following error occured:") + " " + r.messageString());
+    else
+        writeLine(r.messageString());
     return r;
 }
 
@@ -440,6 +467,11 @@ bool TerminalIOHandler::handleUptime(const QString &, const QStringList &)
 bool TerminalIOHandler::handleUser(const QString &, const QStringList &args)
 {
     return user(args);
+}
+
+bool TerminalIOHandler::handleSetAppVersion(const QString &, const QStringList &args)
+{
+    return setAppVersion(args);
 }
 
 bool TerminalIOHandler::handleStart(const QString &, const QStringList &args)
