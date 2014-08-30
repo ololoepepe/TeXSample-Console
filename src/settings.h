@@ -19,12 +19,32 @@
 **
 ****************************************************************************/
 
-#include "application.h"
+#ifndef SETTINGS_H
+#define SETTINGS_H
+
+class BSettingsNode;
 
 #include <QString>
+#include <QVariant>
 
-int main(int argc, char *argv[])
+namespace Settings
 {
-    Application app(argc, argv, "TeXSample Console", "Andrey Bogdanov");
-    return app.exec();
+
+namespace Log
+{
+
+const QString RootPath = "Log";
+const QString LoggingModeSubpath = "mode";
+const QString LogNoopSubpath = "noop";
+
+int loggingMode();
+int logNoop();
+void setLoggingMode(int mode);
+bool setLoggingMode(const BSettingsNode *n, const QVariant &v = QVariant());
+void setLogNoop(int mode);
+
 }
+
+}
+
+#endif // SETTINGS_H

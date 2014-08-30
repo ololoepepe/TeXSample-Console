@@ -4,4 +4,9 @@
 
 === MINOR ===
 
-
+[done] Consider processor architecture for applications versions
+[done] Add GPL headers to files
+[done] Change copyright owner
+[done] Use BeQt 4.0.0
+[done] Use TeXSample 2.0.0
+[done] Use Qt coding style, sort includes, class members, etc.
