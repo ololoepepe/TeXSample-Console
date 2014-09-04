@@ -5,7 +5,7 @@ CONFIG += console release
 
 QT = core concurrent network gui
 BEQT = core network
-TSMP = core
+TSMP = core network
 
 isEmpty(BEQT_PREFIX) {
     #TODO: Add MacOS support
@@ -15,7 +15,7 @@ isEmpty(BEQT_PREFIX) {
         BEQT_PREFIX=$$(systemdrive)/PROGRA~1/BeQt
     }
 }
-include($${BEQT_PREFIX}/depend.pri)
+include($${BEQT_PREFIX}/share/beqt/depend.pri)
 
 isEmpty(TSMP_PREFIX) {
     #TODO: Add MacOS support
@@ -25,16 +25,16 @@ isEmpty(TSMP_PREFIX) {
         TSMP_PREFIX=$$(systemdrive)/PROGRA~1/TeXSample
     }
 }
-include($${TSMP_PREFIX}/depend.pri)
+include($${TSMP_PREFIX}/share/texsample/depend.pri)
 
 SOURCES += \
+    application.cpp \
     main.cpp \
-    terminaliohandler.cpp \
-    global.cpp
+    settings.cpp
 
 HEADERS += \
-    terminaliohandler.h \
-    global.h
+    application.h \
+    settings.h
 
 TRANSLATIONS += \
     ../translations/texsample-console_ru.ts
@@ -70,24 +70,15 @@ contains(TCSL_CONFIG, builtin_resources) {
 
 !contains(TCSL_CONFIG, no_install) {
 
-#mac {
-    #isEmpty(PREFIX):PREFIX=/Library
-    #TODO: Add ability to create bundles
-#} else:unix:!mac {
-#TODO: Add MacOS support
+
 mac|unix {
     isEmpty(PREFIX):PREFIX=/usr
-    equals(PREFIX, "/")|equals(PREFIX, "/usr")|equals(PREFIX, "/usr/local") {
-        isEmpty(BINARY_INSTALLS_PATH):BINARY_INSTALLS_PATH=$${PREFIX}/bin
-        isEmpty(RESOURCES_INSTALLS_PATH):RESOURCES_INSTALLS_PATH=$${PREFIX}/share/texsample-console
-    } else {
-        isEmpty(BINARY_INSTALLS_PATH):BINARY_INSTALLS_PATH=$${PREFIX}
-        isEmpty(RESOURCES_INSTALLS_PATH):RESOURCES_INSTALLS_PATH=$${PREFIX}
-    }
 } else:win32 {
     isEmpty(PREFIX):PREFIX=$$(systemdrive)/PROGRA~1/TeXSample-Console
-    isEmpty(BINARY_INSTALLS_PATH):BINARY_INSTALLS_PATH=$${PREFIX}
 }
+
+isEmpty(BINARY_INSTALLS_PATH):BINARY_INSTALLS_PATH=$${PREFIX}/bin
+isEmpty(RESOURCES_INSTALLS_PATH):RESOURCES_INSTALLS_PATH=$${PREFIX}/share/texsample-console
 
 ##############################################################################
 ################################ Binaries ####################################

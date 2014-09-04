@@ -1,4 +1,12 @@
-=== TeXSample Console 1.1.-beta (05 February 2014) ===
+=== TeXSample Console 2.0.0 (04 September 2014) ===
+    * Consider processor architecture for applications versions
+    * Add GPL headers to files
+    * Change copyright owner
+    * Use BeQt 4.0.0
+    * Use TeXSample 2.0.0
+    * Use Qt coding style, sort includes, class members, etc.
+
+=== TeXSample Console 1.1.0-beta (05 February 2014) ===
     * Use QtGui (TeXSample 1.0.1 compatibility)
     * Fix some strings
     * Fix noop request handling
