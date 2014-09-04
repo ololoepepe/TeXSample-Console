@@ -82,7 +82,7 @@ Application::Application(int &argc, char **argv, const QString &applicationName,
     Q_INIT_RESOURCE(texsample_console);
     Q_INIT_RESOURCE(texsample_console_translations);
 #endif
-    setApplicationVersion("2.0.0-beta");
+    setApplicationVersion("2.0.0");
     setOrganizationDomain("https://github.com/ololoepepe/TeXSample-Console");
     setApplicationCopyrightPeriod("2013-2014");
     BLocationProvider *prov = new BLocationProvider;
