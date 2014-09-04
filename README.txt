@@ -41,7 +41,7 @@ Support of Qt libraries' versions lower than 4.8.0 is not guaranteed.
 You will also need BeQt libraries version 3.0.0 or higher
 and TeXSample library version 1.0.0 or higher.
 
-See: https://github.com/the-dark-angel/BeQt
+See: https://github.com/ololoepepe/BeQt
 and https://github.com/ololoepepe/TeXSample for details.
 
 ==============================================================================

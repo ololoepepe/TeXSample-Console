@@ -24,6 +24,8 @@
 
 class BSettingsNode;
 
+class QByteArray;
+
 #include <QString>
 #include <QVariant>
 
@@ -42,6 +44,29 @@ int logNoop();
 void setLoggingMode(int mode);
 bool setLoggingMode(const BSettingsNode *n, const QVariant &v = QVariant());
 void setLogNoop(int mode);
+
+}
+
+namespace Texsample
+{
+
+const QString RootPath = "Texsample";
+const QString ConnectOnStartupModeSubpath = "connect_on_startup_mode";
+const QString LoginSubpath = "login";
+const QString PasswordSubpath = "password";
+const QString StorePasswordSubpath = "store_password";
+
+int connectOnStartupMode();
+QString login();
+QByteArray password();
+void setConnectOnStartupMode(int mode);
+void setLogin(const QString &login);
+void setPassword(const QByteArray &password);
+bool setPassword(const BSettingsNode *n, const QVariant &v = QVariant());
+void setStorePassword(bool store);
+bool setStorePassword(const BSettingsNode *n, const QVariant &v = QVariant());
+bool showPassword(const BSettingsNode *n, const QVariant &);
+bool storePassword();
 
 }
 

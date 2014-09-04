@@ -42,6 +42,8 @@
 #include <TSetLatestAppVersionRequestData>
 #include <TSetServerStateReplyData>
 #include <TSetServerStateRequestData>
+#include <TSubscribeReplyData>
+#include <TSubscribeRequestData>
 #include <TUserConnectionInfo>
 #include <TUserConnectionInfoList>
 #include <TUserInfo>
@@ -55,6 +57,7 @@
 #include <BTranslation>
 #include <BUuid>
 
+#include <QByteArray>
 #include <QDateTime>
 #include <QDebug>
 #include <QMap>
@@ -79,7 +82,7 @@ Application::Application(int &argc, char **argv, const QString &applicationName,
     Q_INIT_RESOURCE(texsample_console);
     Q_INIT_RESOURCE(texsample_console_translations);
 #endif
-    setApplicationVersion("2.0.0-pa");
+    setApplicationVersion("2.0.0-beta");
     setOrganizationDomain("https://github.com/ololoepepe/TeXSample-Console");
     setApplicationCopyrightPeriod("2013-2014");
     BLocationProvider *prov = new BLocationProvider;
@@ -101,6 +104,16 @@ Application::Application(int &argc, char **argv, const QString &applicationName,
     mclient->installRequestHandler(TOperation::Log, &handleLogRequest);
     mclient->setPingInterval(5 * BeQt::Minute);
     bWriteLine(tr("Enter \"help --commands\" to see the list of available commands"));
+    int c = Settings::Texsample::connectOnStartupMode();
+    if (1 == c) {
+        handleConnectCommand(QString(), QStringList());
+    } else if (2 == c) {
+        QString s = bReadLine(tr("Do you want to connect automatically? [Yes|no]:") + " ");
+        if (s.isEmpty() || !s.compare("y", Qt::CaseInsensitive) || !s.compare("ye", Qt::CaseInsensitive)
+                || !s.compare("yes", Qt::CaseInsensitive)) {
+            handleConnectCommand(QString(), QStringList());
+        }
+    }
 }
 
 Application::~Application()
@@ -186,20 +199,37 @@ bool Application::handleConnectCommand(const QString &, const QStringList &args)
         QString hostName = !args.isEmpty() ? args.first() : QString();
         if (hostName.isEmpty())
             hostName = "texsample-server.no-ip.org";
-        QString login = bReadLine(tr("Enter login/e-mail:") + " ");
-        QString error;
-        if (!Texsample::testEmail(login, &error) && !Texsample::testLogin(login, &error)) {
-            bWriteLine(error);
-            return false;
+        QString login = Settings::Texsample::login();
+        QByteArray password = Settings::Texsample::password();
+        if (!login.isEmpty() || !password.isEmpty()) {
+            QString s = bReadLine(tr("Use stored login/password? [Yes|no]:") + " ");
+            if (!s.isEmpty() && s.compare("y", Qt::CaseInsensitive) && s.compare("ye", Qt::CaseInsensitive)
+                    && s.compare("yes", Qt::CaseInsensitive)) {
+                login.clear();
+                password.clear();
+            }
         }
-        QString password = bReadLineSecure(tr("Enter password:") + " ");
-        if (!Texsample::testPassword(password, &error)) {
-            bWriteLine(error);
-            return false;
+        QString error;
+        if (login.isEmpty()) {
+            login = bReadLine(tr("Enter login/e-mail:") + " ");
+            if (!Texsample::testEmail(login, &error) && !Texsample::testLogin(login, &error)) {
+                bWriteLine(error);
+                return false;
+            }
+            Settings::Texsample::setLogin(login);
+        }
+        if (password.isEmpty()) {
+            QString pwd = bReadLineSecure(tr("Enter password:") + " ");
+            if (!Texsample::testPassword(pwd, &error)) {
+                bWriteLine(error);
+                return false;
+            }
+            password = Texsample::encryptPassword(pwd);
+            Settings::Texsample::setPassword(password);
         }
         client->setHostName(hostName);
         client->setLogin(login);
-        client->setPassword(Texsample::encryptPassword(password));
+        client->setPassword(password);
         bWriteLine(tr("Connecting to", "") + " " + hostName + "...");
         client->connectToServer();
         if (!client->isAuthorized())
@@ -210,6 +240,15 @@ bool Application::handleConnectCommand(const QString &, const QStringList &args)
             return false;
         }
         bWriteLine(tr("Connected to") + " " + hostName);
+        if (client->userInfo().accessLevel().level() >= TAccessLevel::ModeratorLevel) {
+            bWriteLine(tr("Subscribing..."));
+            TSubscribeRequestData requestData;
+            requestData.setSubscribedToLog(true);
+            TReply reply = client->performOperation(TOperation::Subscribe, requestData);
+            if (!reply.success())
+                bWriteLine(tr("Failed to subscribe duse to the following error:") + "\n" + reply.message());
+            bWriteLine(tr("Subscribed"));
+        }
         return true;
     }
     case TNetworkClient::DisconnectingState: {
@@ -557,6 +596,23 @@ void Application::initTerminal()
                                                "  1 - log locally\n"
                                                "  2 and more - log loaclly and remotely\n"
                                                "  The default is 0"));
+    n = new BSettingsNode(Settings::Texsample::RootPath, root);
+    nn = new BSettingsNode(QVariant::Int, Settings::Texsample::ConnectOnStartupModeSubpath, n);
+    nn->setDescription(BTranslation::translate("Application", "Connect on startup. "
+                                               "Possible values:\n"
+                                               "  0 or less - don't connect\n"
+                                               "  1 - try to connect\n"
+                                               "  2 and more - prompt user\n"
+                                               "  The default is 2"));
+    nn = new BSettingsNode(Settings::Texsample::LoginSubpath, n);
+    nn->setDescription(BTranslation::translate("Application", "Identifier used to log into the TeXSample server."));
+    nn = new BSettingsNode(Settings::Texsample::PasswordSubpath, n);
+    nn->setUserSetFunction(&Settings::Texsample::setPassword);
+    nn->setUserShowFunction(&Settings::Texsample::showPassword);
+    nn->setDescription(BTranslation::translate("Application", "Password used to log into the TeXSample server."));
+    nn = new BSettingsNode(Settings::Texsample::StorePasswordSubpath, n);
+    nn->setUserSetFunction(&Settings::Texsample::setStorePassword);
+    nn->setDescription(BTranslation::translate("Application", "Determines wether your password is stored on disk."));
     BTerminal::setRootSettingsNode(root);
     BTerminal::setHelpDescription(BTranslation::translate("Application",
         "This is TeXSample Console. Enter \"help --all\" to see full Help"));
